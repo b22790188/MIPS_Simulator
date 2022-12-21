@@ -92,7 +92,7 @@ void IF(int &line, IF_ID &IF_ID_Reg){
     }
     inFile.close();
     
-    //Get name of operation.
+    //Get name of operation by format string.
     sscanf(instruction.c_str(), "%s $", op.c_str());
 
     fstream outFile;
@@ -125,6 +125,89 @@ void IF(int &line, IF_ID &IF_ID_Reg){
 }
 
 void ID(IF_ID &IF_ID_Reg, ID_EX &ID_EX_Reg){
+    string op;
+    int rs = 0;
+    int rt = 0;
+    int rd = 0;
+    int imm = 0;
+    if(IF_ID_Reg.instruction[0] == 'l'){
+        sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, %d($%d)", op.c_str(), &rt, &imm, &rs);
+        /*
+        Write Control signal to ID/EX pipeline regitser
+        */
+        ID_EX_Reg.RegDst = 0;
+        ID_EX_Reg.ALUSrc = 1;
+        ID_EX_Reg.Branch = 0;
+        ID_EX_Reg.MemRead = 1;
+        ID_EX_Reg.MemWrite = 0;
+        ID_EX_Reg.RegWrite = 1;
+        ID_EX_Reg.MemtoReg = 1;
+        /*
+        store data source.
+        */
+        ID_EX_Reg.ReadData1 = reg[rs];
+        ID_EX_Reg.SignExtend = imm/4;
+    }
+    else if(IF_ID_Reg.instruction[0] == 's'){
+        sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, %d($%d)", op.c_str(), &rt, &imm, &rs);
+        /*
+        Write Control signal to ID/EX pipeline regitser
+        */
+        ID_EX_Reg.RegDst = 0;
+        ID_EX_Reg.ALUSrc = 1;
+        ID_EX_Reg.Branch = 0;
+        ID_EX_Reg.MemRead = 0;
+        ID_EX_Reg.MemWrite = 1;
+        ID_EX_Reg.RegWrite = 0;
+        ID_EX_Reg.MemtoReg = 0;
+        /*
+        store data source.
+        */
+        ID_EX_Reg.ReadData1 = reg[rs];
+        ID_EX_Reg.SignExtend = imm/4;
+    }
+    /*
+    R-format
+    */
+    else if(IF_ID_Reg.instruction[0] == 'a' || (IF_ID_Reg.instruction[0] == 's' || IF_ID_Reg.instruction[1] == 'u')){
+        sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, $%d, $%d", op.c_str(), &rd, &rs, &rt);
+        /*
+        Write Control signal to ID/EX pipeline regitser
+        */
+        ID_EX_Reg.RegDst = 1;
+        ID_EX_Reg.ALUSrc = 0;
+        ID_EX_Reg.Branch = 0;
+        ID_EX_Reg.MemRead = 0;
+        ID_EX_Reg.MemWrite = 0;
+        ID_EX_Reg.RegWrite = 1;
+        ID_EX_Reg.MemtoReg = 0;
+        /*
+        store data source.
+        */
+        ID_EX_Reg.ReadData1 = reg[rs];
+        ID_EX_Reg.ReadData2 = reg[rt];
+    }
+    /*
+    branch
+    */
+    else{
+        sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, $%d, $%d", op.c_str(), &rs, &rt, &imm);
+        /*
+        Write Control signal to ID/EX pipeline regitser
+        */
+        ID_EX_Reg.RegDst = 0;
+        ID_EX_Reg.ALUSrc = 0;
+        ID_EX_Reg.Branch = 1;
+        ID_EX_Reg.MemRead = 0;
+        ID_EX_Reg.MemWrite = 0;
+        ID_EX_Reg.RegWrite = 0;
+        ID_EX_Reg.MemtoReg = 0;
+        /*
+        store data source.
+        */
+        ID_EX_Reg.ReadData1 = reg[rs];
+        ID_EX_Reg.ReadData2 = reg[rt];
+    }
 
 }
 
