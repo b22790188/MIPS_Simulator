@@ -21,6 +21,7 @@ struct ID_EX{
     int RegWrite = 0;
     int MemtoReg = 0;
     
+    string op;
     int ReadData1 = 0;
     int ReadData2 = 0;
     int SignExtend = 0;
@@ -35,6 +36,7 @@ struct EX_MEM{
     int RegWrite = 0;
     int MemtoReg = 0;
 
+    string op;
     int Possible_PC = 0;
     int Zero = 0;
     int ALUResult = 0;
@@ -61,8 +63,9 @@ static MEM_WB MEM_WB_Reg;
 static int reg[32] = {0};
 static int mem[32] = {0};
 
-string insBuf = "";
+int line = 1;
 bool PC_Write = true;
+bool branch_outcome = false;
 
 bool IF_Off = true;
 bool ID_Off = true;
@@ -72,7 +75,7 @@ bool WB_Off = true;
 int stall = 0;
 
 void initialization();
-void IF(int &line);
+void IF();
 void ID();
 void EX();
 void MEM();
@@ -88,7 +91,7 @@ void initialization(){
 /**
 @param line is upcoming instruction to be fetched.
 */
-void IF(int &line){
+void IF(){
     string op;
     string instruction;
     
@@ -113,17 +116,20 @@ void IF(int &line){
     if(!PC_Write){
         IF_Off = false;
         ID_Off = false;
+        /*
+        here
+        */
         return;
     }
 
     /*
+    Normal condition
     Write to IF/ID Register.
     */
     IF_ID_Reg.instruction = instruction;
     IF_ID_Reg.line = line;
 
     /*
-    Normal condition
     line = line + 1 , simulate as PC+4
     */
     line = line + 1;
@@ -132,6 +138,15 @@ void IF(int &line){
 }
 
 void ID(){
+    /*
+    if branch outcome has been confirmed, redo IF stage instead of passing 
+    instrunction to ID stage.
+    */
+    if(branch_outcome == true){
+        branch_outcome = false;
+        return;
+    }
+
     string op;
     int rs = 0;
     int rt = 0;
@@ -149,13 +164,16 @@ void ID(){
         ID_EX_Reg.MemWrite = 0;
         ID_EX_Reg.RegWrite = 1;
         ID_EX_Reg.MemtoReg = 1;
+        ID_EX_Reg.op = op;
         /*
         store data source.
         */
         ID_EX_Reg.ReadData1 = reg[rs];
-        ID_EX_Reg.SignExtend = imm/4;
+        ID_EX_Reg.SignExtend = imm;
+        ID_EX_Reg.rt = rt;
+        ID_EX_Reg.rd = rd;
     }
-    else if(IF_ID_Reg.instruction[0] == 's'){
+    else if(IF_ID_Reg.instruction[0] == 's' && IF_ID_Reg.instruction[1] == 'w'){
         sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, %d($%d)", op.c_str(), &rt, &imm, &rs);
         /*
         Write Control signal to ID/EX pipeline regitser
@@ -167,11 +185,15 @@ void ID(){
         ID_EX_Reg.MemWrite = 1;
         ID_EX_Reg.RegWrite = 0;
         ID_EX_Reg.MemtoReg = 0;
+        ID_EX_Reg.op = op;
+
         /*
         store data source.
         */
         ID_EX_Reg.ReadData1 = reg[rs];
-        ID_EX_Reg.SignExtend = imm/4;
+        ID_EX_Reg.SignExtend = imm;
+        ID_EX_Reg.rt = rt;
+        ID_EX_Reg.rd = rd;
     }
     /*
     R-format
@@ -188,11 +210,15 @@ void ID(){
         ID_EX_Reg.MemWrite = 0;
         ID_EX_Reg.RegWrite = 1;
         ID_EX_Reg.MemtoReg = 0;
+        ID_EX_Reg.op = op;
+
         /*
         store data source.
         */
         ID_EX_Reg.ReadData1 = reg[rs];
         ID_EX_Reg.ReadData2 = reg[rt];
+        ID_EX_Reg.rt = rt;
+        ID_EX_Reg.rd = rd;
     }
     /*
     Branch
@@ -209,13 +235,19 @@ void ID(){
         ID_EX_Reg.MemWrite = 0;
         ID_EX_Reg.RegWrite = 0;
         ID_EX_Reg.MemtoReg = 0;
+        ID_EX_Reg.op = op;
+
         /*
         Store data source.
         */
         ID_EX_Reg.ReadData1 = reg[rs];
         ID_EX_Reg.ReadData2 = reg[rt];
+        ID_EX_Reg.rt = rt;
+        ID_EX_Reg.rd = rd;
     }
-
+    /*
+    Output to file.
+    */
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
     outFile << op.c_str() << ":ID" << endl;
@@ -234,11 +266,8 @@ void ID(){
     All instruction hazard check except branch have same hazard check condition.
     Branch instruction hazard check needs to be handle in other way.
     */
-    if(op[0] == 'b'){
+    if(op.c_str()[0] == 'b'){
         if((MEM_WB_Reg.TargetReg = rs || MEM_WB_Reg.TargetReg == rt) && MEM_WB_Reg.RegWrite == 1){
-            /*
-            set stall rounds and PC_Write to false.
-            */
             stall = 2;
             PC_Write = false;
             /*
@@ -256,7 +285,7 @@ void ID(){
         }
     }
     else{
-         if((MEM_WB_Reg.TargetReg = rs || MEM_WB_Reg.TargetReg == rt) && MEM_WB_Reg.RegWrite == 1){
+        if((MEM_WB_Reg.TargetReg = rs || MEM_WB_Reg.TargetReg == rt) && MEM_WB_Reg.RegWrite == 1){
             stall = 2;
             ID_EX initial;
             ID_EX_Reg = initial;
@@ -267,14 +296,90 @@ void ID(){
     EX_Off = false;
 }
 
+void EX(){
+    fstream outFile;
+    outFile.open("memory.txt", ios::out | ios::app);
+    outFile << ID_EX_Reg.op.c_str() << ":EX ";
+    if(ID_EX_Reg.RegWrite){
+        cout << ID_EX_Reg.RegDst << ID_EX_Reg.ALUSrc << " " << ID_EX_Reg.Branch
+             << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << ID_EX_Reg.MemtoReg;
+    }
+    else{
+        cout << "X" << ID_EX_Reg.ALUSrc << " " << ID_EX_Reg.Branch
+             << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << "X";
+    }
+    outFile.close();
+
+
+    if(ID_EX_Reg.op.c_str()[0] == 'l' || (ID_EX_Reg.op.c_str()[0] == 's' && ID_EX_Reg.op.c_str()[1] == 'w')){
+        int MEM_Addr = ID_EX_Reg.ReadData1 + ID_EX_Reg.SignExtend * 4;
+
+        EX_MEM_Reg.ALUResult = MEM_Addr;
+    }
+    else if(ID_EX_Reg.op.c_str()[0] == 'a'){
+        int result = ID_EX_Reg.ReadData1 + ID_EX_Reg.ReadData2;
+
+        EX_MEM_Reg.ALUResult = result;
+    }
+
+    else if(ID_EX_Reg.op.c_str()[0] == 's' && ID_EX_Reg.op.c_str()[1] == 'u'){
+        int result = ID_EX_Reg.ReadData1 - ID_EX_Reg.ReadData2;
+
+        EX_MEM_Reg.ALUResult = result;
+    }
+    else {
+        int result = ID_EX_Reg.ReadData1 - ID_EX_Reg.ReadData2;
+        /*
+        if result equal zero, need branch.
+        */
+        if(!result){
+            line = line + ID_EX_Reg.SignExtend;
+        }
+        branch_outcome = true;
+    }
+
+    /*
+    Pass control signal to EX/MEM register.
+    */
+    EX_MEM_Reg.Branch = ID_EX_Reg.Branch;
+    EX_MEM_Reg.MemRead = ID_EX_Reg.MemRead;
+    EX_MEM_Reg.MemWrite = ID_EX_Reg.MemWrite;
+    EX_MEM_Reg.RegWrite = ID_EX_Reg.RegWrite;
+    EX_MEM_Reg.MemtoReg = ID_EX_Reg.MemtoReg;
+
+    EX_MEM_Reg.op = ID_EX_Reg.op;
+    EX_MEM_Reg.ReadData2 = ID_EX_Reg.ReadData2;
+    EX_MEM_Reg.TargetReg = (ID_EX_Reg.RegDst) ? ID_EX_Reg.rd : ID_EX_Reg.rt;
+
+    EX_Off = true;
+    MEM_Off = false;
+}
+
+void MEM(){
+    fstream outFile;
+    outFile.open("result.txt", ios::out | ios::app);
+    outFile << EX_MEM_Reg.op.c_str() << ":MEM ";
+     if(EX_MEM_Reg.RegWrite){
+        cout << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite 
+                << " " << EX_MEM_Reg.RegWrite << EX_MEM_Reg.MemtoReg;
+    }
+    else{
+        cout << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite 
+                << " " << EX_MEM_Reg.RegWrite << "X";
+    }
+    outFile.close();
+
+    if(EX_MEM_Reg.MemWrite){
+        EX_MEM_Reg.ReadData2 
+    }
+}
+
 int main(){
     /*
-    @param nextIns is specified to line that will be fetched in next cycle.
-    @param numOfIns record number of instruction in memory.
+    @param numOfIns specified to number of instruction in memory.
     @param buf is used as buffer.
     @param inFile is used as inputFilestream.
     */
-    int nextIns = 1;
     int numOfIns = 0;
     int cycle = 1;
     string buf;
@@ -319,12 +424,13 @@ int main(){
             ID();
         }
 
-        if(nextIns == numOfIns + 1){
+        if(line == numOfIns + 1){
             IF_Off = true;
         }
         else{
-            IF(nextIns);
+            IF();
         }
+
         stall--;
 
         if(IF_Off && ID_Off && EX_Off && MEM_Off && WB_Off){
