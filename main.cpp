@@ -50,6 +50,13 @@ struct MEM_WB{
     int ALUResult = 0;
     int TargetReg = 0;
 };
+/*
+declare pipeline reg
+*/
+static IF_ID IF_ID_Reg;
+static ID_EX ID_EX_Reg;
+static EX_MEM EX_MEM_Reg;
+static MEM_WB MEM_WB_Reg;
 
 static int reg[32] = {0};
 static int mem[32] = {0};
@@ -65,11 +72,11 @@ bool WB_Off = true;
 int stall = 0;
 
 void initialization();
-void IF(int &line, IF_ID &IF_ID_Reg);
-void ID(IF_ID &IF_ID_Reg, ID_EX &ID_EX_Reg);
-void EX(ID_EX &ID_EX_Reg, EX_MEM &EX_MEM_Reg);
-void MEM(EX_MEM &EX_MEM_Reg, MEM_WB &MEM_WB_Reg);
-void WB(MEM_WB &MEM_WB_Reg);
+void IF(int &line);
+void ID();
+void EX();
+void MEM();
+void WB();
 
 void initialization(){
     for (int i = 0; i < 32; i++){
@@ -81,7 +88,7 @@ void initialization(){
 /**
 @param line is upcoming instruction to be fetched.
 */
-void IF(int &line, IF_ID &IF_ID_Reg){
+void IF(int &line){
     string op;
     string instruction;
     
@@ -124,7 +131,7 @@ void IF(int &line, IF_ID &IF_ID_Reg){
     ID_Off = false;
 }
 
-void ID(IF_ID &IF_ID_Reg, ID_EX &ID_EX_Reg){
+void ID(){
     string op;
     int rs = 0;
     int rt = 0;
@@ -188,7 +195,7 @@ void ID(IF_ID &IF_ID_Reg, ID_EX &ID_EX_Reg){
         ID_EX_Reg.ReadData2 = reg[rt];
     }
     /*
-    branch
+    Branch
     */
     else{
         sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, $%d, $%d", op.c_str(), &rs, &rt, &imm);
@@ -203,23 +210,64 @@ void ID(IF_ID &IF_ID_Reg, ID_EX &ID_EX_Reg){
         ID_EX_Reg.RegWrite = 0;
         ID_EX_Reg.MemtoReg = 0;
         /*
-        store data source.
+        Store data source.
         */
         ID_EX_Reg.ReadData1 = reg[rs];
         ID_EX_Reg.ReadData2 = reg[rt];
     }
 
+    fstream outFile;
+    outFile.open("result.txt", ios::out | ios::app);
+    outFile << op.c_str() << ":ID" << endl;
+    outFile.close();
+
+    /*
+    keep ID stage.
+    */
+    if(stall > 0){
+        ID_Off = false;
+        return;
+    }
+
+    /*
+    Hazard check
+    All instruction hazard check except branch have same hazard check condition.
+    Branch instruction hazard check needs to be handle in other way.
+    */
+    if(op[0] == 'b'){
+        if((MEM_WB_Reg.TargetReg = rs || MEM_WB_Reg.TargetReg == rt) && MEM_WB_Reg.RegWrite == 1){
+            /*
+            set stall rounds and PC_Write to false.
+            */
+            stall = 2;
+            PC_Write = false;
+            /*
+            Redeclare a new ID_EX_Reg to initialize ID_EX_Reg
+            */
+            ID_EX initial;
+            ID_EX_Reg = initial;
+        }
+        else{
+            /*
+            Wait until branch outcome determined before fetching next instruction.
+            */
+            stall = 1;
+            PC_Write = false;
+        }
+    }
+    else{
+         if((MEM_WB_Reg.TargetReg = rs || MEM_WB_Reg.TargetReg == rt) && MEM_WB_Reg.RegWrite == 1){
+            stall = 2;
+            ID_EX initial;
+            ID_EX_Reg = initial;
+        }
+    }
+
+    ID_Off = true;
+    EX_Off = false;
 }
 
 int main(){
-    /*
-    declare pipeline reg
-    */
-    IF_ID IF_ID_Reg;
-    ID_EX ID_EX_Reg;
-    EX_MEM EX_MEM_Reg;
-    MEM_WB MEM_WB_Reg;
-
     /*
     @param nextIns is specified to line that will be fetched in next cycle.
     @param numOfIns record number of instruction in memory.
@@ -249,32 +297,39 @@ int main(){
         outFile.open("result.txt",ios::out | ios::app);
         outFile << "Cycle: " << cycle << endl;
         outFile.close();
+
+        if(stall == 0){
+            PC_Write = true;
+        }
         /*
         if(!WB_Off){
-            WB(MEM_WB_Reg);
+            WB();
         }
 
         if(!MEM_Off){
-            MEM(EX_MEM_Reg, MEM_WB_Reg);
+            MEM();
         }
 
         if(!EX_Off){
-            EX(ID_EX_Reg, EX_MEM_Reg);
-        }
-
-        if(!ID_Off){
-            ID(IF_ID_Reg, ID_EX_Reg);
+            EX();
         }
         */
+
+        if(!ID_Off){
+            ID();
+        }
 
         if(nextIns == numOfIns + 1){
             IF_Off = true;
         }
         else{
-            IF(nextIns, IF_ID_Reg);
+            IF(nextIns);
         }
-        //not done here.
-        cout << nextIns << endl;
+        stall--;
+
+        if(IF_Off && ID_Off && EX_Off && MEM_Off && WB_Off){
+            break;
+        }
         cycle++;
     }
 
