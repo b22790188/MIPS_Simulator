@@ -432,7 +432,7 @@ void WB(){
         /*
         Write back to register
         */
-        if(MEM_WB_Reg.MemtoReg){
+        if(!MEM_WB_Reg.MemtoReg){
             reg[MEM_WB_Reg.TargetReg] = MEM_WB_Reg.ALUResult;
         }
         else{
