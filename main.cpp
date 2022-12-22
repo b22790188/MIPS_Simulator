@@ -94,7 +94,7 @@ void initialization(){
 void IF(){
     string op;
     string instruction;
-    
+
     fstream inFile;
     inFile.open("memory.txt",ios::in);
     for (int i = 1; i <= line; i++){
@@ -222,7 +222,7 @@ void ID(){
     Branch
     */
     else{
-        sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, $%d, $%d", op.c_str(), &rs, &rt, &imm);
+        sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, $%d, %d", op.c_str(), &rs, &rt, &imm);
         /*
         Write Control signal to ID/EX pipeline regitser
         */
@@ -243,6 +243,7 @@ void ID(){
         ID_EX_Reg.SignExtend = imm;
         ID_EX_Reg.rt = rt;
         ID_EX_Reg.rd = rd;
+
     }
     cout << ID_EX_Reg.op << endl;//=================================================
     /*
@@ -287,14 +288,8 @@ void ID(){
             PC_Write = false;
 
         } 
-        ID_Off = true;
-        EX_Off = false;
     }
     else{
-        /*
-        cout << EX_MEM_Reg.TargetReg << endl; //===============================================
-        cout << rs << " " << rt << endl;//==================================================
-        */
         
         if((EX_MEM_Reg.TargetReg == rs || EX_MEM_Reg.TargetReg == rt) && EX_MEM_Reg.RegWrite == 1){
             stall = 2;
@@ -305,13 +300,9 @@ void ID(){
             cout << "test" << endl;//=========================================================
 
         }
-
-        /*
-        Normal condition
-        */
-        ID_Off = true;
-        EX_Off = false;
     }
+    ID_Off = true;
+    EX_Off = false;
 }
 
 void EX(){
@@ -352,8 +343,10 @@ void EX(){
         /*
         if result equal zero, need branch.
         */
+        cout << result << endl; //=============================================
+        cout << ID_EX_Reg.SignExtend << endl;//=========================================
         if(!result){
-            line = line + ID_EX_Reg.SignExtend / 4;
+            line = line + ID_EX_Reg.SignExtend;
         }
         branch_outcome = true;
     }
