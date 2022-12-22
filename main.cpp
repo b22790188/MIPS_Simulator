@@ -48,6 +48,7 @@ struct MEM_WB{
     int RegWrite = 0;
     int MemtoReg = 0;
 
+    string op;
     int ReadData = 0;
     int ALUResult = 0;
     int TargetReg = 0;
@@ -107,7 +108,7 @@ void IF(){
 
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
-    outFile << op.c_str() << ":IF" << endl;
+    outFile << "    " <<op.c_str() << ":IF" << endl;
     outFile.close();
     
     /*
@@ -144,6 +145,9 @@ void ID(){
     */
     if(branch_outcome == true){
         branch_outcome = false;
+    
+        IF_ID initial;
+        IF_ID_Reg = initial;
         return;
     }
 
@@ -238,6 +242,8 @@ void ID(){
         /*
         Store data source.
         */
+        cout << reg[rs] << " " << reg[rt] << endl;//======================================
+        cout << rs << " " << rt << endl;//==============================================
         ID_EX_Reg.ReadData1 = reg[rs];
         ID_EX_Reg.ReadData2 = reg[rt];
         ID_EX_Reg.SignExtend = imm;
@@ -251,7 +257,7 @@ void ID(){
     */
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
-    outFile << string(op.c_str()) << ":ID" << endl;
+    outFile << "    " <<string(op.c_str()) << ":ID" << endl;
     outFile.close();
 
     /*
@@ -306,21 +312,24 @@ void ID(){
 }
 
 void EX(){
-
+    /*
+    if(!ID_EX_Reg.RegDst || !ID_EX_Reg.ALUSrc || !ID_EX_Reg.Branch || !ID_EX_Reg.MemRead ||
+    !ID_EX_Reg.MemWrite || !ID_EX_Reg.RegWrite || !ID_EX_Reg.MemtoReg)
+    */
 
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
-    outFile << ID_EX_Reg.op << ":EX ";
+    outFile << "    " << ID_EX_Reg.op << ":EX ";
     if(ID_EX_Reg.RegWrite){
         outFile << ID_EX_Reg.RegDst << ID_EX_Reg.ALUSrc << " " << ID_EX_Reg.Branch
-             << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << ID_EX_Reg.MemtoReg << endl;
+            << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << ID_EX_Reg.MemtoReg << endl;
     }
     else{
         outFile << "X" << ID_EX_Reg.ALUSrc << " " << ID_EX_Reg.Branch
-             << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << "X" << endl;
+            << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << "X" << endl;
     }
     outFile.close();
-
+    
 
     if(ID_EX_Reg.op[0] == 'l' || (ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'w')){
         int MEM_Addr = ID_EX_Reg.ReadData1 + ID_EX_Reg.SignExtend / 4;
@@ -332,7 +341,6 @@ void EX(){
 
         EX_MEM_Reg.ALUResult = result;
     }
-
     else if(ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'u'){
         int result = ID_EX_Reg.ReadData1 - ID_EX_Reg.ReadData2;
 
@@ -343,9 +351,11 @@ void EX(){
         /*
         if result equal zero, need branch.
         */
+        cout << ID_EX_Reg.ReadData1 << endl;
+        cout << ID_EX_Reg.ReadData2 << endl;
         cout << result << endl; //=============================================
         cout << ID_EX_Reg.SignExtend << endl;//=========================================
-        if(!result){
+        if(result == 0){
             line = line + ID_EX_Reg.SignExtend;
         }
         branch_outcome = true;
@@ -354,6 +364,7 @@ void EX(){
     /*
     Pass control signal to EX/MEM register.
     */
+
     EX_MEM_Reg.Branch = ID_EX_Reg.Branch;
     EX_MEM_Reg.MemRead = ID_EX_Reg.MemRead;
     EX_MEM_Reg.MemWrite = ID_EX_Reg.MemWrite;
@@ -364,15 +375,21 @@ void EX(){
     EX_MEM_Reg.ReadData2 = ID_EX_Reg.ReadData2;
     EX_MEM_Reg.TargetReg = (ID_EX_Reg.RegDst) ? ID_EX_Reg.rd : ID_EX_Reg.rt;
 
+    /*
+    ID_EX initial;
+    ID_EX_Reg = initial;
+    */
+
     EX_Off = true;
     MEM_Off = false;
 }
 
 void MEM(){
+    
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
-    outFile << EX_MEM_Reg.op << ":MEM ";
-     if(EX_MEM_Reg.RegWrite){
+    outFile << "    " << EX_MEM_Reg.op << ":MEM ";
+    if(EX_MEM_Reg.RegWrite){
         outFile << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite 
                 << " " << EX_MEM_Reg.RegWrite << EX_MEM_Reg.MemtoReg << endl;
     }
@@ -391,12 +408,48 @@ void MEM(){
         mem[EX_MEM_Reg.ALUResult] = EX_MEM_Reg.ReadData2;
     }
 
+    MEM_WB_Reg.op = EX_MEM_Reg.op;
     MEM_WB_Reg.RegWrite = EX_MEM_Reg.RegWrite;
     MEM_WB_Reg.MemtoReg = EX_MEM_Reg.MemtoReg;
     MEM_WB_Reg.ALUResult = EX_MEM_Reg.ALUResult;
     MEM_WB_Reg.TargetReg = EX_MEM_Reg.TargetReg;
 
+    /*
+    EX_MEM initial;
+    EX_MEM_Reg = initial;
+    */
+
     MEM_Off = true;
+    WB_Off = false;
+}
+
+void WB(){
+    fstream outFile;
+    outFile.open("result.txt", ios::out | ios::app);
+    outFile << "    " << MEM_WB_Reg.op << ":WB ";
+    if(MEM_WB_Reg.RegWrite){
+        outFile << MEM_WB_Reg.RegWrite << MEM_WB_Reg.MemtoReg << endl;
+        /*
+        Write back to register
+        */
+        if(MEM_WB_Reg.MemtoReg){
+            reg[MEM_WB_Reg.TargetReg] = MEM_WB_Reg.ALUResult;
+        }
+        else{
+            reg[MEM_WB_Reg.TargetReg] = MEM_WB_Reg.ReadData;
+        }
+
+    }
+    else{
+        outFile << MEM_WB_Reg.RegWrite << "X" << endl;
+    }
+    outFile.close();
+
+    /*
+    MEM_WB initial;
+    MEM_WB_Reg = initial;
+    */
+
     WB_Off = true;
 }
 
@@ -432,12 +485,11 @@ int main(){
         if(stall == 0){
             PC_Write = true;
         }
-        /*
+    
         if(!WB_Off){
             WB();
         }
         
-        */
         if(!MEM_Off){
             MEM();
         }
@@ -463,6 +515,30 @@ int main(){
             break;
         }
         cycle++;
+    }
+
+    /*
+    reg and mem output
+    */
+    fstream outFile;
+    outFile.open("result.txt", ios::out | ios::app);
+    outFile << "\n\n";
+    outFile << "需要花" << cycle << "個cycle" << endl;
+
+    for (int i = 0; i < 32;i ++){
+        outFile << "$" << i << " ";
+    }
+    outFile << endl;
+    for (int i = 0; i < 32;i ++){
+        outFile << reg[i] << "  ";
+    }
+    outFile << endl;
+    for (int i = 0; i < 31;i ++){
+        outFile << "W" << i << " ";
+    }
+    outFile << endl;
+    for (int i = 0; i < 32;i ++){
+        outFile << mem[i] << "  ";
     }
 
     return 0;
