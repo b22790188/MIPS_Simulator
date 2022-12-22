@@ -194,6 +194,7 @@ void ID(){
         store data source.
         */
         ID_EX_Reg.ReadData1 = reg[rs];
+        ID_EX_Reg.ReadData2 = reg[rt];
         ID_EX_Reg.SignExtend = imm;
         ID_EX_Reg.rt = rt;
         ID_EX_Reg.rd = rd;
@@ -304,7 +305,6 @@ void ID(){
             ID_EX initial;
             ID_EX_Reg = initial;
             cout << "test" << endl;//=========================================================
-
         }
     }
     ID_Off = true;
@@ -312,10 +312,12 @@ void ID(){
 }
 
 void EX(){
-    /*
-    if(!ID_EX_Reg.RegDst || !ID_EX_Reg.ALUSrc || !ID_EX_Reg.Branch || !ID_EX_Reg.MemRead ||
-    !ID_EX_Reg.MemWrite || !ID_EX_Reg.RegWrite || !ID_EX_Reg.MemtoReg)
-    */
+    
+    if(!ID_EX_Reg.RegDst && !ID_EX_Reg.ALUSrc && !ID_EX_Reg.Branch && !ID_EX_Reg.MemRead &&
+    !ID_EX_Reg.MemWrite && !ID_EX_Reg.RegWrite && !ID_EX_Reg.MemtoReg){
+        return;
+    }
+    
 
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
@@ -333,7 +335,7 @@ void EX(){
 
     if(ID_EX_Reg.op[0] == 'l' || (ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'w')){
         int MEM_Addr = ID_EX_Reg.ReadData1 + ID_EX_Reg.SignExtend / 4;
-
+        cout << "lw or sw EX" << endl;
         EX_MEM_Reg.ALUResult = MEM_Addr;
     }
     else if(ID_EX_Reg.op[0] == 'a'){
@@ -374,11 +376,11 @@ void EX(){
     EX_MEM_Reg.op = ID_EX_Reg.op;
     EX_MEM_Reg.ReadData2 = ID_EX_Reg.ReadData2;
     EX_MEM_Reg.TargetReg = (ID_EX_Reg.RegDst) ? ID_EX_Reg.rd : ID_EX_Reg.rt;
+    cout << "ID:readdata" << ID_EX_Reg.ReadData2 << endl;//================================================
 
-    /*
     ID_EX initial;
     ID_EX_Reg = initial;
-    */
+    
 
     EX_Off = true;
     MEM_Off = false;
@@ -406,6 +408,7 @@ void MEM(){
     //store to memory
     if(EX_MEM_Reg.MemWrite){
         mem[EX_MEM_Reg.ALUResult] = EX_MEM_Reg.ReadData2;
+        cout << "EX readdata" << EX_MEM_Reg.ReadData2 << endl;//==============================================================
     }
 
     MEM_WB_Reg.op = EX_MEM_Reg.op;
@@ -414,10 +417,10 @@ void MEM(){
     MEM_WB_Reg.ALUResult = EX_MEM_Reg.ALUResult;
     MEM_WB_Reg.TargetReg = EX_MEM_Reg.TargetReg;
 
-    /*
+    
     EX_MEM initial;
     EX_MEM_Reg = initial;
-    */
+    
 
     MEM_Off = true;
     WB_Off = false;
@@ -445,10 +448,10 @@ void WB(){
     }
     outFile.close();
 
-    /*
+    
     MEM_WB initial;
     MEM_WB_Reg = initial;
-    */
+    
 
     WB_Off = true;
 }
