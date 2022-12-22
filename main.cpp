@@ -197,7 +197,7 @@ void ID(){
     /*
     R-format
     */
-    else if(IF_ID_Reg.instruction[0] == 'a' || (IF_ID_Reg.instruction[0] == 's' || IF_ID_Reg.instruction[1] == 'u')){
+    else if(IF_ID_Reg.instruction[0] == 'a' || (IF_ID_Reg.instruction[0] == 's' && IF_ID_Reg.instruction[1] == 'u')){
         sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, $%d, $%d", op.c_str(), &rd, &rs, &rt);
         /*
         Write Control signal to ID/EX pipeline regitser
@@ -210,7 +210,6 @@ void ID(){
         ID_EX_Reg.RegWrite = 1;
         ID_EX_Reg.MemtoReg = 0;
         ID_EX_Reg.op = string(op.c_str());
-
         /*
         store data source.
         */
@@ -241,6 +240,7 @@ void ID(){
         */
         ID_EX_Reg.ReadData1 = reg[rs];
         ID_EX_Reg.ReadData2 = reg[rt];
+        ID_EX_Reg.SignExtend = imm;
         ID_EX_Reg.rt = rt;
         ID_EX_Reg.rd = rd;
     }
@@ -278,7 +278,6 @@ void ID(){
             */
             ID_EX initial;
             ID_EX_Reg = initial;
-
         }
         else{
             /*
@@ -288,30 +287,35 @@ void ID(){
             PC_Write = false;
 
         } 
+        ID_Off = true;
+        EX_Off = false;
     }
     else{
         /*
-        cout << MEM_WB_Reg.TargetReg << endl;
-        cout << rs << " " << rt << endl;
+        cout << EX_MEM_Reg.TargetReg << endl; //===============================================
+        cout << rs << " " << rt << endl;//==================================================
         */
+        
         if((EX_MEM_Reg.TargetReg == rs || EX_MEM_Reg.TargetReg == rt) && EX_MEM_Reg.RegWrite == 1){
             stall = 2;
             PC_Write = false;
 
             ID_EX initial;
             ID_EX_Reg = initial;
-        }
-    }
+            cout << "test" << endl;//=========================================================
 
-    ID_Off = true;
-    EX_Off = false;
+        }
+
+        /*
+        Normal condition
+        */
+        ID_Off = true;
+        EX_Off = false;
+    }
 }
 
 void EX(){
-    
-    if(stall > 0){
-        return;
-    }
+
 
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
@@ -349,7 +353,7 @@ void EX(){
         if result equal zero, need branch.
         */
         if(!result){
-            line = line + ID_EX_Reg.SignExtend;
+            line = line + ID_EX_Reg.SignExtend / 4;
         }
         branch_outcome = true;
     }
