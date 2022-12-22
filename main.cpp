@@ -20,7 +20,7 @@ struct ID_EX{
     int MemWrite = 0;
     int RegWrite = 0;
     int MemtoReg = 0;
-    
+
     string op;
     int ReadData1 = 0;
     int ReadData2 = 0;
@@ -164,7 +164,7 @@ void ID(){
         ID_EX_Reg.MemWrite = 0;
         ID_EX_Reg.RegWrite = 1;
         ID_EX_Reg.MemtoReg = 1;
-        ID_EX_Reg.op = op;
+        ID_EX_Reg.op = string(op.c_str());
         /*
         store data source.
         */
@@ -185,8 +185,7 @@ void ID(){
         ID_EX_Reg.MemWrite = 1;
         ID_EX_Reg.RegWrite = 0;
         ID_EX_Reg.MemtoReg = 0;
-        ID_EX_Reg.op = op;
-
+        ID_EX_Reg.op = string(op.c_str());
         /*
         store data source.
         */
@@ -210,7 +209,7 @@ void ID(){
         ID_EX_Reg.MemWrite = 0;
         ID_EX_Reg.RegWrite = 1;
         ID_EX_Reg.MemtoReg = 0;
-        ID_EX_Reg.op = op;
+        ID_EX_Reg.op = string(op.c_str());
 
         /*
         store data source.
@@ -235,7 +234,7 @@ void ID(){
         ID_EX_Reg.MemWrite = 0;
         ID_EX_Reg.RegWrite = 0;
         ID_EX_Reg.MemtoReg = 0;
-        ID_EX_Reg.op = op;
+        ID_EX_Reg.op = string(op.c_str());
 
         /*
         Store data source.
@@ -245,12 +244,13 @@ void ID(){
         ID_EX_Reg.rt = rt;
         ID_EX_Reg.rd = rd;
     }
+    cout << ID_EX_Reg.op << endl;//=================================================
     /*
     Output to file.
     */
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
-    outFile << op.c_str() << ":ID" << endl;
+    outFile << string(op.c_str()) << ":ID" << endl;
     outFile.close();
 
     /*
@@ -258,6 +258,9 @@ void ID(){
     */
     if(stall > 0){
         ID_Off = false;
+        ID_EX initial;
+        ID_EX_Reg = initial;
+
         return;
     }
 
@@ -267,14 +270,15 @@ void ID(){
     Branch instruction hazard check needs to be handle in other way.
     */
     if(op.c_str()[0] == 'b'){
-        if((MEM_WB_Reg.TargetReg = rs || MEM_WB_Reg.TargetReg == rt) && MEM_WB_Reg.RegWrite == 1){
+        if((EX_MEM_Reg.TargetReg == rs || EX_MEM_Reg.TargetReg == rt) && EX_MEM_Reg.RegWrite == 1){
             stall = 2;
             PC_Write = false;
             /*
-            Redeclare a new ID_EX_Reg to initialize ID_EX_Reg
+            Clear ID_EX_Reg
             */
             ID_EX initial;
             ID_EX_Reg = initial;
+
         }
         else{
             /*
@@ -282,11 +286,18 @@ void ID(){
             */
             stall = 1;
             PC_Write = false;
-        }
+
+        } 
     }
     else{
-        if((MEM_WB_Reg.TargetReg = rs || MEM_WB_Reg.TargetReg == rt) && MEM_WB_Reg.RegWrite == 1){
+        /*
+        cout << MEM_WB_Reg.TargetReg << endl;
+        cout << rs << " " << rt << endl;
+        */
+        if((EX_MEM_Reg.TargetReg == rs || EX_MEM_Reg.TargetReg == rt) && EX_MEM_Reg.RegWrite == 1){
             stall = 2;
+            PC_Write = false;
+
             ID_EX initial;
             ID_EX_Reg = initial;
         }
@@ -297,37 +308,42 @@ void ID(){
 }
 
 void EX(){
+    
+    if(stall > 0){
+        return;
+    }
+
     fstream outFile;
-    outFile.open("memory.txt", ios::out | ios::app);
-    outFile << ID_EX_Reg.op.c_str() << ":EX ";
+    outFile.open("result.txt", ios::out | ios::app);
+    outFile << ID_EX_Reg.op << ":EX ";
     if(ID_EX_Reg.RegWrite){
-        cout << ID_EX_Reg.RegDst << ID_EX_Reg.ALUSrc << " " << ID_EX_Reg.Branch
-             << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << ID_EX_Reg.MemtoReg;
+        outFile << ID_EX_Reg.RegDst << ID_EX_Reg.ALUSrc << " " << ID_EX_Reg.Branch
+             << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << ID_EX_Reg.MemtoReg << endl;
     }
     else{
-        cout << "X" << ID_EX_Reg.ALUSrc << " " << ID_EX_Reg.Branch
-             << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << "X";
+        outFile << "X" << ID_EX_Reg.ALUSrc << " " << ID_EX_Reg.Branch
+             << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << "X" << endl;
     }
     outFile.close();
 
 
-    if(ID_EX_Reg.op.c_str()[0] == 'l' || (ID_EX_Reg.op.c_str()[0] == 's' && ID_EX_Reg.op.c_str()[1] == 'w')){
-        int MEM_Addr = ID_EX_Reg.ReadData1 + ID_EX_Reg.SignExtend * 4;
+    if(ID_EX_Reg.op[0] == 'l' || (ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'w')){
+        int MEM_Addr = ID_EX_Reg.ReadData1 + ID_EX_Reg.SignExtend / 4;
 
         EX_MEM_Reg.ALUResult = MEM_Addr;
     }
-    else if(ID_EX_Reg.op.c_str()[0] == 'a'){
+    else if(ID_EX_Reg.op[0] == 'a'){
         int result = ID_EX_Reg.ReadData1 + ID_EX_Reg.ReadData2;
 
         EX_MEM_Reg.ALUResult = result;
     }
 
-    else if(ID_EX_Reg.op.c_str()[0] == 's' && ID_EX_Reg.op.c_str()[1] == 'u'){
+    else if(ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'u'){
         int result = ID_EX_Reg.ReadData1 - ID_EX_Reg.ReadData2;
 
         EX_MEM_Reg.ALUResult = result;
     }
-    else {
+    else if(ID_EX_Reg.op[0] == 'b'){
         int result = ID_EX_Reg.ReadData1 - ID_EX_Reg.ReadData2;
         /*
         if result equal zero, need branch.
@@ -358,20 +374,33 @@ void EX(){
 void MEM(){
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
-    outFile << EX_MEM_Reg.op.c_str() << ":MEM ";
+    outFile << EX_MEM_Reg.op << ":MEM ";
      if(EX_MEM_Reg.RegWrite){
-        cout << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite 
-                << " " << EX_MEM_Reg.RegWrite << EX_MEM_Reg.MemtoReg;
+        outFile << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite 
+                << " " << EX_MEM_Reg.RegWrite << EX_MEM_Reg.MemtoReg << endl;
     }
     else{
-        cout << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite 
-                << " " << EX_MEM_Reg.RegWrite << "X";
+        outFile << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite 
+                << " " << EX_MEM_Reg.RegWrite << "X" << endl;
     }
     outFile.close();
 
-    if(EX_MEM_Reg.MemWrite){
-        EX_MEM_Reg.ReadData2 
+    //load from memory
+    if(EX_MEM_Reg.MemRead){
+        MEM_WB_Reg.ReadData = mem[EX_MEM_Reg.ALUResult];
     }
+    //store to memory
+    if(EX_MEM_Reg.MemWrite){
+        mem[EX_MEM_Reg.ALUResult] = EX_MEM_Reg.ReadData2;
+    }
+
+    MEM_WB_Reg.RegWrite = EX_MEM_Reg.RegWrite;
+    MEM_WB_Reg.MemtoReg = EX_MEM_Reg.MemtoReg;
+    MEM_WB_Reg.ALUResult = EX_MEM_Reg.ALUResult;
+    MEM_WB_Reg.TargetReg = EX_MEM_Reg.TargetReg;
+
+    MEM_Off = true;
+    WB_Off = true;
 }
 
 int main(){
@@ -410,7 +439,8 @@ int main(){
         if(!WB_Off){
             WB();
         }
-
+        
+        */
         if(!MEM_Off){
             MEM();
         }
@@ -418,9 +448,8 @@ int main(){
         if(!EX_Off){
             EX();
         }
-        */
 
-        if(!ID_Off){
+        if(!ID_Off || stall > 0){
             ID();
         }
 
