@@ -3,16 +3,25 @@
 #include <fstream>
 #include <string>
 using namespace std;
+
+void initialization();
+void IF();
+void ID();
+void EX();
+void MEM();
+void WB();
 /**
-define pipeline register using struct
+定義pipeline register結構
 */
 struct IF_ID{
     string instruction = "";
     int line = 0;
     bool IF_ID_Write = true;
 };
-
 struct ID_EX{
+    /*
+    控制信號
+    */
     int RegDst = 0;
     int ALUSrc = 0;
     int Branch = 0;
@@ -21,6 +30,9 @@ struct ID_EX{
     int RegWrite = 0;
     int MemtoReg = 0;
 
+    /*
+    進到下一個階段所需資料，ID_EX暫存器中原本應有的ALU op0 op1改用string op來替代
+    */
     string op;
     int ReadData1 = 0;
     int ReadData2 = 0;
@@ -36,6 +48,9 @@ struct EX_MEM{
     int RegWrite = 0;
     int MemtoReg = 0;
 
+    /*
+    possibe_PC及zero在EX階段中皆在EX階段中進行，沒有被使用到
+    */
     string op;
     int Possible_PC = 0;
     int Zero = 0;
@@ -53,6 +68,7 @@ struct MEM_WB{
     int ALUResult = 0;
     int TargetReg = 0;
 };
+
 /*
 declare pipeline reg
 */
@@ -64,7 +80,13 @@ static MEM_WB MEM_WB_Reg;
 static int reg[32] = {0};
 static int mem[32] = {0};
 
-string insbuf;
+/**
+@param stall: 做為stall計數的變數
+@param line : 指當前指令所在的行數，模擬MIPS Pipeline CPU中的PC
+@param branch_outcome: 用來確定branch指令的計算結果是否已經出來
+@param branch_equal: 判斷branch結果為equal or not equal
+@param beq_stall: beq正常執行時需要的變數
+*/
 int stall = 0;
 int line = 1;
 bool PC_Write = true;
@@ -72,19 +94,18 @@ bool branch_outcome = false;
 bool branch_equal = false;
 bool beq_stall = false;
 
+/*
+對各個階段使用bool變數做為階段啟動的開關
+*/
 bool IF_Off = true;
 bool ID_Off = true;
 bool EX_Off= true;
 bool MEM_Off = true;
 bool WB_Off = true;
 
-void initialization();
-void IF();
-void ID();
-void EX();
-void MEM();
-void WB();
-
+/*
+初始化暫存器及記憶體
+*/
 void initialization(){
     for (int i = 0; i < 32; i++){
         reg[i] = 1;
@@ -92,13 +113,16 @@ void initialization(){
     }
     reg[0] = 0;
 }
-/**
-@param line is upcoming instruction to be fetched.
+
+/*
+IF階段實作
 */
 void IF(){
     string op;
     string instruction;
-    
+    /*
+    指令讀取
+    */
     fstream inFile;
     inFile.open("memory.txt",ios::in);
     for (int i = 1; i <= line; i++){
@@ -106,17 +130,18 @@ void IF(){
     }
     inFile.close();
     
-    //Get name of operation by format string.
+    /*
+    輸出到檔案
+    */
     sscanf(instruction.c_str(), "%s $", op.c_str());
-
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
     outFile << "    " <<op.c_str() << ":IF" << endl;
     outFile.close();
     
     /*
-    當遇到beq正常stall的時候，需要先將暫存器值更新，使得beq在EX階段
-    計算出not branch的結果時，ID做decode的時候不會直接重複decode同
+    當遇到beq在ID階段正常decode的時候(beq的ID階段沒遇到stall)，則需要先將IF_ID_Reg值更新，
+    使得當beq進入EX階段，計算出not branch的結果後，ID做decode的時候不會直接重複decode同
     一個指令。
     */
     if(beq_stall){
@@ -126,29 +151,23 @@ void IF(){
         ID_Off = false;
         return;
     }
-    /*
-    stall condition, do not update PC and IF_ID_Reg.
-    */
 
+    /*
+    用來處理其他一般的stall狀況，也就是不更新PC及IF_ID暫存器。
+    */
     if(!PC_Write){
         IF_Off = false;
         ID_Off = false;
-        /*
-        here
-        */        
         return;
     }
 
 
     /*
-    Normal condition
-    Write to IF/ID Register.
+    以下則為正常的IF階段會做的操作
+    1.更新IF_ID暫存器
+    2.PC=PC+4(即更新PC到下一行指令，同 line=line+1 )
     */
     IF_ID_Reg.instruction = instruction;
-
-    /*
-    line = line + 1 , simulate as PC+4
-    */
     line = line + 1;
     IF_Off = true;
     ID_Off = false;
@@ -267,8 +286,6 @@ void ID(){
         /*
         Store data source.
         */
-        cout << reg[rs] << " " << reg[rt] << endl;//======================================
-        cout << rs << " " << rt << endl;//==============================================
         ID_EX_Reg.ReadData1 = reg[rs];
         ID_EX_Reg.ReadData2 = reg[rt];
         ID_EX_Reg.SignExtend = imm;
@@ -276,7 +293,6 @@ void ID(){
         ID_EX_Reg.rd = rd;
 
     }
-    cout << ID_EX_Reg.op << endl;//=================================================
     /*
     Output to file.
     */
@@ -336,7 +352,6 @@ void ID(){
 
             ID_EX initial;
             ID_EX_Reg = initial;
-            cout << "test" << endl;//=========================================================
         }
     }
     ID_Off = true;
@@ -366,7 +381,6 @@ void EX(){
 
     if(ID_EX_Reg.op[0] == 'l' || (ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'w')){
         int MEM_Addr = ID_EX_Reg.ReadData1 + ID_EX_Reg.SignExtend / 4;
-        cout << "lw or sw EX" << endl;
         EX_MEM_Reg.ALUResult = MEM_Addr;
     }
     else if(ID_EX_Reg.op[0] == 'a'){
@@ -384,10 +398,6 @@ void EX(){
         /*
         if result equal zero, need branch.
         */
-        cout << ID_EX_Reg.ReadData1 << endl;
-        cout << ID_EX_Reg.ReadData2 << endl;
-        cout << result << endl; //=============================================
-        cout << ID_EX_Reg.SignExtend << endl;//=========================================
         if(result == 0){
     
             line = line + ID_EX_Reg.SignExtend;
@@ -416,7 +426,6 @@ void EX(){
     EX_MEM_Reg.op = ID_EX_Reg.op;
     EX_MEM_Reg.ReadData2 = ID_EX_Reg.ReadData2;
     EX_MEM_Reg.TargetReg = (ID_EX_Reg.RegDst) ? ID_EX_Reg.rd : ID_EX_Reg.rt;
-    cout << "ID:readdata" << ID_EX_Reg.ReadData2 << endl;//================================================
 
     ID_EX initial;
     ID_EX_Reg = initial;
@@ -448,7 +457,6 @@ void MEM(){
     //store to memory
     if(EX_MEM_Reg.MemWrite){
         mem[EX_MEM_Reg.ALUResult] = EX_MEM_Reg.ReadData2;
-        cout << "EX readdata" << EX_MEM_Reg.ReadData2 << endl;//==============================================================
     }
 
     MEM_WB_Reg.op = EX_MEM_Reg.op;
