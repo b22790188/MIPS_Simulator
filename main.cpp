@@ -64,16 +64,19 @@ static MEM_WB MEM_WB_Reg;
 static int reg[32] = {0};
 static int mem[32] = {0};
 
+string insbuf;
+int stall = 0;
 int line = 1;
 bool PC_Write = true;
 bool branch_outcome = false;
+bool branch_equal = false;
+bool beq_stall = false;
 
 bool IF_Off = true;
 bool ID_Off = true;
 bool EX_Off= true;
 bool MEM_Off = true;
 bool WB_Off = true;
-int stall = 0;
 
 void initialization();
 void IF();
@@ -95,7 +98,7 @@ void initialization(){
 void IF(){
     string op;
     string instruction;
-
+    
     fstream inFile;
     inFile.open("memory.txt",ios::in);
     for (int i = 1; i <= line; i++){
@@ -112,23 +115,36 @@ void IF(){
     outFile.close();
     
     /*
-    stall condition, do not update PC.
+    當遇到beq正常stall的時候，需要先將暫存器值更新，使得beq在EX階段
+    計算出not branch的結果時，ID做decode的時候不會直接重複decode同
+    一個指令。
     */
+    if(beq_stall){
+        IF_ID_Reg.instruction = instruction;
+        beq_stall = false;
+        IF_Off = true;
+        ID_Off = false;
+        return;
+    }
+    /*
+    stall condition, do not update PC and IF_ID_Reg.
+    */
+
     if(!PC_Write){
         IF_Off = false;
         ID_Off = false;
         /*
         here
-        */
+        */        
         return;
     }
+
 
     /*
     Normal condition
     Write to IF/ID Register.
     */
     IF_ID_Reg.instruction = instruction;
-    IF_ID_Reg.line = line;
 
     /*
     line = line + 1 , simulate as PC+4
@@ -143,13 +159,20 @@ void ID(){
     if branch outcome has been confirmed, redo IF stage instead of passing 
     instrunction to ID stage.
     */
-    if(branch_outcome == true){
+
+    /*
+    branch結果出來後，branch equal不進ID階段 , not equal直接decode
+    */
+    if(branch_outcome && branch_equal){
         branch_outcome = false;
-    
+        branch_equal = false;
+        /*
         IF_ID initial;
         IF_ID_Reg = initial;
+        */
         return;
     }
+
 
     string op;
     int rs = 0;
@@ -173,6 +196,7 @@ void ID(){
         store data source.
         */
         ID_EX_Reg.ReadData1 = reg[rs];
+        ID_EX_Reg.ReadData2 = reg[rt];
         ID_EX_Reg.SignExtend = imm;
         ID_EX_Reg.rt = rt;
         ID_EX_Reg.rd = rd;
@@ -275,7 +299,7 @@ void ID(){
     /*
     Hazard check
     All instruction hazard check except branch have same hazard check condition.
-    Branch instruction hazard check needs to be handle in other way.
+    Branch instruction hazard check needs to be handled in other way.
     */
     if(op.c_str()[0] == 'b'){
         if((EX_MEM_Reg.TargetReg == rs || EX_MEM_Reg.TargetReg == rt) && EX_MEM_Reg.RegWrite == 1){
@@ -291,9 +315,17 @@ void ID(){
             /*
             Wait until branch outcome determined before fetching next instruction.
             */
+
+            /*
+            當收到beq指令ID 時(非stall)，使得beq stall為true，令PC可以寫入
+            */
+
+            beq_stall = true;
+            /*
+
             stall = 1;
             PC_Write = false;
-
+            */
         } 
     }
     else{
@@ -317,7 +349,6 @@ void EX(){
     !ID_EX_Reg.MemWrite && !ID_EX_Reg.RegWrite && !ID_EX_Reg.MemtoReg){
         return;
     }
-    
 
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
@@ -358,8 +389,17 @@ void EX(){
         cout << result << endl; //=============================================
         cout << ID_EX_Reg.SignExtend << endl;//=========================================
         if(result == 0){
+    
             line = line + ID_EX_Reg.SignExtend;
+            branch_equal = true;
         }
+        
+        else{
+            line = line + 1;
+        }
+        
+        /*
+        */
         branch_outcome = true;
     }
 
