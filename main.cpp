@@ -1,6 +1,6 @@
 #include <cstdio>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <string>
 using namespace std;
 
@@ -13,12 +13,14 @@ void WB();
 /**
 定義pipeline register結構
 */
-struct IF_ID{
+struct IF_ID
+{
     string instruction = "";
     int line = 0;
     bool IF_ID_Write = true;
 };
-struct ID_EX{
+struct ID_EX
+{
     /*
     控制信號
     */
@@ -41,7 +43,8 @@ struct ID_EX{
     int rd = 0;
 };
 
-struct EX_MEM{
+struct EX_MEM
+{
     int Branch = 0;
     int MemRead = 0;
     int MemWrite = 0;
@@ -59,7 +62,8 @@ struct EX_MEM{
     int TargetReg = 0;
 };
 
-struct MEM_WB{
+struct MEM_WB
+{
     int RegWrite = 0;
     int MemtoReg = 0;
 
@@ -99,15 +103,17 @@ bool beq_stall = false;
 */
 bool IF_Off = true;
 bool ID_Off = true;
-bool EX_Off= true;
+bool EX_Off = true;
 bool MEM_Off = true;
 bool WB_Off = true;
 
 /*
 初始化暫存器及記憶體
 */
-void initialization(){
-    for (int i = 0; i < 32; i++){
+void initialization()
+{
+    for (int i = 0; i < 32; i++)
+    {
         reg[i] = 1;
         mem[i] = 1;
     }
@@ -117,34 +123,37 @@ void initialization(){
 /*
 IF階段實作
 */
-void IF(){
+void IF()
+{
     string op;
     string instruction;
     /*
     指令讀取
     */
     fstream inFile;
-    inFile.open("memory.txt",ios::in);
-    for (int i = 1; i <= line; i++){
+    inFile.open("memory.txt", ios::in);
+    for (int i = 1; i <= line; i++)
+    {
         getline(inFile, instruction);
     }
     inFile.close();
-    
+
     /*
     輸出到檔案
     */
     sscanf(instruction.c_str(), "%s $", op.c_str());
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
-    outFile << "    " <<op.c_str() << ":IF" << endl;
+    outFile << "    " << op.c_str() << ":IF" << endl;
     outFile.close();
-    
+
     /*
     當遇到beq在ID階段正常decode的時候(beq的ID階段沒遇到stall)，則需要先將IF_ID_Reg值更新，
     使得當beq進入EX階段，計算出not branch的結果後，ID做decode的時候不會直接重複decode同
-    一個指令。
+    一個指令。(作圖解釋later)
     */
-    if(beq_stall){
+    if (beq_stall)
+    {
         IF_ID_Reg.instruction = instruction;
         beq_stall = false;
         IF_Off = true;
@@ -155,12 +164,12 @@ void IF(){
     /*
     用來處理其他一般的stall狀況，也就是不更新PC及IF_ID暫存器。
     */
-    if(!PC_Write){
+    if (!PC_Write)
+    {
         IF_Off = false;
         ID_Off = false;
         return;
     }
-
 
     /*
     以下則為正常的IF階段會做的操作
@@ -173,16 +182,18 @@ void IF(){
     ID_Off = false;
 }
 
-void ID(){
-    /*
-    if branch outcome has been confirmed, redo IF stage instead of passing 
-    instrunction to ID stage.
-    */
+void ID()
+{
 
     /*
-    branch結果出來後，branch equal不進ID階段 , not equal直接decode
+    這個判斷主要是在處理當beq指令進到EX階段後，ID階段所做的處理，因為當beq進到EX階段後，同cycle的
+    ID階段可能會遇到以下兩種情況:
+    1.branch結果出來，結果為equal，表示這個ID階段需要做stall，因為指令還沒IF。
+    2.branch結果出來，結果為not equal，直接將IF_ID暫存器中存放的指令拿出來做decode。
     */
-    if(branch_outcome && branch_equal){
+
+    if (branch_outcome && branch_equal)
+    {
         branch_outcome = false;
         branch_equal = false;
         /*
@@ -192,14 +203,23 @@ void ID(){
         return;
     }
 
+    /*
+    各指令decode，並將各項參數傳給ID_EX暫存器。
+    */
 
     string op;
     int rs = 0;
     int rt = 0;
     int rd = 0;
     int imm = 0;
-    if(IF_ID_Reg.instruction[0] == 'l'){
+
+    /*
+    lw decode
+    */
+    if (IF_ID_Reg.instruction[0] == 'l')
+    {
         sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, %d($%d)", op.c_str(), &rt, &imm, &rs);
+
         /*
         Write Control signal to ID/EX pipeline regitser
         */
@@ -211,6 +231,7 @@ void ID(){
         ID_EX_Reg.RegWrite = 1;
         ID_EX_Reg.MemtoReg = 1;
         ID_EX_Reg.op = string(op.c_str());
+
         /*
         store data source.
         */
@@ -220,8 +241,14 @@ void ID(){
         ID_EX_Reg.rt = rt;
         ID_EX_Reg.rd = rd;
     }
-    else if(IF_ID_Reg.instruction[0] == 's' && IF_ID_Reg.instruction[1] == 'w'){
+
+    /*
+    sw decode
+    */
+    else if (IF_ID_Reg.instruction[0] == 's' && IF_ID_Reg.instruction[1] == 'w')
+    {
         sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, %d($%d)", op.c_str(), &rt, &imm, &rs);
+
         /*
         Write Control signal to ID/EX pipeline regitser
         */
@@ -233,6 +260,7 @@ void ID(){
         ID_EX_Reg.RegWrite = 0;
         ID_EX_Reg.MemtoReg = 0;
         ID_EX_Reg.op = string(op.c_str());
+
         /*
         store data source.
         */
@@ -242,11 +270,14 @@ void ID(){
         ID_EX_Reg.rt = rt;
         ID_EX_Reg.rd = rd;
     }
+
     /*
-    R-format
+    R-format decode
     */
-    else if(IF_ID_Reg.instruction[0] == 'a' || (IF_ID_Reg.instruction[0] == 's' && IF_ID_Reg.instruction[1] == 'u')){
+    else if (IF_ID_Reg.instruction[0] == 'a' || (IF_ID_Reg.instruction[0] == 's' && IF_ID_Reg.instruction[1] == 'u'))
+    {
         sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, $%d, $%d", op.c_str(), &rd, &rs, &rt);
+
         /*
         Write Control signal to ID/EX pipeline regitser
         */
@@ -258,6 +289,7 @@ void ID(){
         ID_EX_Reg.RegWrite = 1;
         ID_EX_Reg.MemtoReg = 0;
         ID_EX_Reg.op = string(op.c_str());
+
         /*
         store data source.
         */
@@ -266,11 +298,14 @@ void ID(){
         ID_EX_Reg.rt = rt;
         ID_EX_Reg.rd = rd;
     }
+
     /*
-    Branch
+    Branch decode
     */
-    else{
+    else
+    {
         sscanf(IF_ID_Reg.instruction.c_str(), "%s $%d, $%d, %d", op.c_str(), &rs, &rt, &imm);
+
         /*
         Write Control signal to ID/EX pipeline regitser
         */
@@ -291,20 +326,21 @@ void ID(){
         ID_EX_Reg.SignExtend = imm;
         ID_EX_Reg.rt = rt;
         ID_EX_Reg.rd = rd;
-
     }
+
     /*
     Output to file.
     */
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
-    outFile << "    " <<string(op.c_str()) << ":ID" << endl;
+    outFile << "    " << string(op.c_str()) << ":ID" << endl;
     outFile.close();
 
     /*
-    keep ID stage.
+    檢查ID階段是不是還在stall，將暫存器ID_EX Reg的值全部更新為0，後面的EX,MEM,WB stage做NOP。
     */
-    if(stall > 0){
+    if (stall > 0)
+    {
         ID_Off = false;
         ID_EX initial;
         ID_EX_Reg = initial;
@@ -316,37 +352,42 @@ void ID(){
     Hazard check
     All instruction hazard check except branch have same hazard check condition.
     Branch instruction hazard check needs to be handled in other way.
+
+    判斷現在指令有沒有跟前指令衝突
+    若有衝突表示需要stall，清空暫存器，令後面階段做NOP。
+    而因為需要等到前指令在WB階段將值寫回暫存器後，才可以讀到正確的值，所以至少需要等待兩個cycle(EX,MEM stage)，
+    也就是下方程式碼將stall設為2的原因。
     */
-    if(op.c_str()[0] == 'b'){
-        if((EX_MEM_Reg.TargetReg == rs || EX_MEM_Reg.TargetReg == rt) && EX_MEM_Reg.RegWrite == 1){
+    if (op.c_str()[0] == 'b')
+    {
+        if ((EX_MEM_Reg.TargetReg == rs || EX_MEM_Reg.TargetReg == rt) && EX_MEM_Reg.RegWrite == 1)
+        {
             stall = 2;
             PC_Write = false;
+
             /*
             Clear ID_EX_Reg
             */
             ID_EX initial;
             ID_EX_Reg = initial;
         }
-        else{
+        else
+        {
             /*
             Wait until branch outcome determined before fetching next instruction.
             */
 
-            /*
-            當收到beq指令ID 時(非stall)，使得beq stall為true，令PC可以寫入
-            */
-
             beq_stall = true;
             /*
-
             stall = 1;
             PC_Write = false;
             */
-        } 
+        }
     }
-    else{
-        
-        if((EX_MEM_Reg.TargetReg == rs || EX_MEM_Reg.TargetReg == rt) && EX_MEM_Reg.RegWrite == 1){
+    else
+    {
+        if ((EX_MEM_Reg.TargetReg == rs || EX_MEM_Reg.TargetReg == rt) && EX_MEM_Reg.RegWrite == 1)
+        {
             stall = 2;
             PC_Write = false;
 
@@ -354,62 +395,75 @@ void ID(){
             ID_EX_Reg = initial;
         }
     }
+
+    /*
+    ID階段結束，EX階段開始。
+    */
     ID_Off = true;
     EX_Off = false;
 }
 
-void EX(){
-    
-    if(!ID_EX_Reg.RegDst && !ID_EX_Reg.ALUSrc && !ID_EX_Reg.Branch && !ID_EX_Reg.MemRead &&
-    !ID_EX_Reg.MemWrite && !ID_EX_Reg.RegWrite && !ID_EX_Reg.MemtoReg){
+void EX()
+{
+
+    if (!ID_EX_Reg.RegDst && !ID_EX_Reg.ALUSrc && !ID_EX_Reg.Branch && !ID_EX_Reg.MemRead &&
+        !ID_EX_Reg.MemWrite && !ID_EX_Reg.RegWrite && !ID_EX_Reg.MemtoReg)
+    {
         return;
     }
 
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
     outFile << "    " << ID_EX_Reg.op << ":EX ";
-    if(ID_EX_Reg.RegWrite){
+    if (ID_EX_Reg.RegWrite)
+    {
         outFile << ID_EX_Reg.RegDst << ID_EX_Reg.ALUSrc << " " << ID_EX_Reg.Branch
-            << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << ID_EX_Reg.MemtoReg << endl;
+                << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << ID_EX_Reg.MemtoReg << endl;
     }
-    else{
+    else
+    {
         outFile << "X" << ID_EX_Reg.ALUSrc << " " << ID_EX_Reg.Branch
-            << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << "X" << endl;
+                << ID_EX_Reg.MemRead << ID_EX_Reg.MemWrite << " " << ID_EX_Reg.RegWrite << "X" << endl;
     }
     outFile.close();
-    
 
-    if(ID_EX_Reg.op[0] == 'l' || (ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'w')){
+    if (ID_EX_Reg.op[0] == 'l' || (ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'w'))
+    {
         int MEM_Addr = ID_EX_Reg.ReadData1 + ID_EX_Reg.SignExtend / 4;
         EX_MEM_Reg.ALUResult = MEM_Addr;
     }
-    else if(ID_EX_Reg.op[0] == 'a'){
+    else if (ID_EX_Reg.op[0] == 'a')
+    {
         int result = ID_EX_Reg.ReadData1 + ID_EX_Reg.ReadData2;
 
         EX_MEM_Reg.ALUResult = result;
     }
-    else if(ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'u'){
+    else if (ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'u')
+    {
         int result = ID_EX_Reg.ReadData1 - ID_EX_Reg.ReadData2;
 
         EX_MEM_Reg.ALUResult = result;
     }
-    else if(ID_EX_Reg.op[0] == 'b'){
+    else if (ID_EX_Reg.op[0] == 'b')
+    {
         int result = ID_EX_Reg.ReadData1 - ID_EX_Reg.ReadData2;
         /*
         if result equal zero, need branch.
         */
-        if(result == 0){
-    
+        if (result == 0)
+        {
+
             line = line + ID_EX_Reg.SignExtend;
             branch_equal = true;
         }
-        
-        else{
+
+        else
+        {
             line = line + 1;
         }
-        
+
         /*
-        */
+         */
         branch_outcome = true;
     }
 
@@ -429,33 +483,37 @@ void EX(){
 
     ID_EX initial;
     ID_EX_Reg = initial;
-    
 
     EX_Off = true;
     MEM_Off = false;
 }
 
-void MEM(){
-    
+void MEM()
+{
+
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
     outFile << "    " << EX_MEM_Reg.op << ":MEM ";
-    if(EX_MEM_Reg.RegWrite){
-        outFile << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite 
+    if (EX_MEM_Reg.RegWrite)
+    {
+        outFile << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite
                 << " " << EX_MEM_Reg.RegWrite << EX_MEM_Reg.MemtoReg << endl;
     }
-    else{
-        outFile << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite 
+    else
+    {
+        outFile << EX_MEM_Reg.Branch << EX_MEM_Reg.MemRead << EX_MEM_Reg.MemWrite
                 << " " << EX_MEM_Reg.RegWrite << "X" << endl;
     }
     outFile.close();
 
-    //load from memory
-    if(EX_MEM_Reg.MemRead){
+    // load from memory
+    if (EX_MEM_Reg.MemRead)
+    {
         MEM_WB_Reg.ReadData = mem[EX_MEM_Reg.ALUResult];
     }
-    //store to memory
-    if(EX_MEM_Reg.MemWrite){
+    // store to memory
+    if (EX_MEM_Reg.MemWrite)
+    {
         mem[EX_MEM_Reg.ALUResult] = EX_MEM_Reg.ReadData2;
     }
 
@@ -465,46 +523,47 @@ void MEM(){
     MEM_WB_Reg.ALUResult = EX_MEM_Reg.ALUResult;
     MEM_WB_Reg.TargetReg = EX_MEM_Reg.TargetReg;
 
-    
     EX_MEM initial;
     EX_MEM_Reg = initial;
-    
 
     MEM_Off = true;
     WB_Off = false;
 }
 
-void WB(){
+void WB()
+{
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
     outFile << "    " << MEM_WB_Reg.op << ":WB ";
-    if(MEM_WB_Reg.RegWrite){
+    if (MEM_WB_Reg.RegWrite)
+    {
         outFile << MEM_WB_Reg.RegWrite << MEM_WB_Reg.MemtoReg << endl;
         /*
         Write back to register
         */
-        if(!MEM_WB_Reg.MemtoReg){
+        if (!MEM_WB_Reg.MemtoReg)
+        {
             reg[MEM_WB_Reg.TargetReg] = MEM_WB_Reg.ALUResult;
         }
-        else{
+        else
+        {
             reg[MEM_WB_Reg.TargetReg] = MEM_WB_Reg.ReadData;
         }
-
     }
-    else{
+    else
+    {
         outFile << MEM_WB_Reg.RegWrite << "X" << endl;
     }
     outFile.close();
 
-    
     MEM_WB initial;
     MEM_WB_Reg = initial;
-    
 
     WB_Off = true;
 }
 
-int main(){
+int main()
+{
     /*
     @param numOfIns specified to number of instruction in memory.
     @param buf is used as buffer.
@@ -522,47 +581,57 @@ int main(){
     initialization();
 
     inFile.open("memory.txt", ios::in);
-    while(getline(inFile,buf)){
+    while (getline(inFile, buf))
+    {
         numOfIns++;
     }
     buf = "";
-    
-    while(true){
+
+    while (true)
+    {
         fstream outFile;
-        outFile.open("result.txt",ios::out | ios::app);
+        outFile.open("result.txt", ios::out | ios::app);
         outFile << "Cycle: " << cycle << endl;
         outFile.close();
 
-        if(stall == 0){
+        if (stall == 0)
+        {
             PC_Write = true;
         }
-    
-        if(!WB_Off){
+
+        if (!WB_Off)
+        {
             WB();
         }
-        
-        if(!MEM_Off){
+
+        if (!MEM_Off)
+        {
             MEM();
         }
 
-        if(!EX_Off){
+        if (!EX_Off)
+        {
             EX();
         }
 
-        if(!ID_Off || stall > 0){
+        if (!ID_Off || stall > 0)
+        {
             ID();
         }
 
-        if(line == numOfIns + 1){
+        if (line == numOfIns + 1)
+        {
             IF_Off = true;
         }
-        else{
+        else
+        {
             IF();
         }
 
         stall--;
 
-        if(IF_Off && ID_Off && EX_Off && MEM_Off && WB_Off){
+        if (IF_Off && ID_Off && EX_Off && MEM_Off && WB_Off)
+        {
             break;
         }
         cycle++;
@@ -576,19 +645,23 @@ int main(){
     outFile << "\n\n";
     outFile << "需要花" << cycle << "個cycle" << endl;
 
-    for (int i = 0; i < 32;i ++){
+    for (int i = 0; i < 32; i++)
+    {
         outFile << "$" << i << " ";
     }
     outFile << endl;
-    for (int i = 0; i < 32;i ++){
+    for (int i = 0; i < 32; i++)
+    {
         outFile << reg[i] << "  ";
     }
     outFile << endl;
-    for (int i = 0; i < 31;i ++){
+    for (int i = 0; i < 31; i++)
+    {
         outFile << "W" << i << " ";
     }
     outFile << endl;
-    for (int i = 0; i < 32;i ++){
+    for (int i = 0; i < 32; i++)
+    {
         outFile << mem[i] << "  ";
     }
 
