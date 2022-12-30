@@ -162,7 +162,7 @@ void IF()
     }
 
     /*
-    用來處理其他一般的stall狀況，也就是不更新PC及IF_ID暫存器。
+    用來處理其他一般的stall狀況，也就是不更新PC及IF_ID暫存器，直接return。
     */
     if (!PC_Write)
     {
@@ -340,7 +340,7 @@ void ID()
     檢查ID階段是不是還在stall，將暫存器ID_EX Reg的值全部更新為0，後面的EX,MEM,WB stage做NOP。
     */
     if (stall > 0)
-    {
+    {   
         ID_Off = false;
         ID_EX initial;
         ID_EX_Reg = initial;
@@ -405,13 +405,19 @@ void ID()
 
 void EX()
 {
-
+    /*
+    用來判斷是否做NOP，若ID_EX暫存器中的控制信號皆為0的時候，表示需做nop，所以接下來的
+    EX運算、MEM階段、WB階段都不需要執行了，所以直接return。
+    */
     if (!ID_EX_Reg.RegDst && !ID_EX_Reg.ALUSrc && !ID_EX_Reg.Branch && !ID_EX_Reg.MemRead &&
         !ID_EX_Reg.MemWrite && !ID_EX_Reg.RegWrite && !ID_EX_Reg.MemtoReg)
     {
         return;
     }
 
+    /*
+    檔案輸入
+    */
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
     outFile << "    " << ID_EX_Reg.op << ":EX ";
@@ -427,28 +433,48 @@ void EX()
     }
     outFile.close();
 
+    /*
+    下面的部分依照傳過來的op決定ALU應該要做那些運算。
+    */
+
+    /*
+    lw及sw因為在EX階段做的事情都是計算要存取/寫入的記憶體位址，所以位址計算放在同一個if block中。
+    */
     if (ID_EX_Reg.op[0] == 'l' || (ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'w'))
     {
         int MEM_Addr = ID_EX_Reg.ReadData1 + ID_EX_Reg.SignExtend / 4;
         EX_MEM_Reg.ALUResult = MEM_Addr;
     }
+
+    /*
+    add將傳過來的ReadData做相加運算
+    */
     else if (ID_EX_Reg.op[0] == 'a')
     {
         int result = ID_EX_Reg.ReadData1 + ID_EX_Reg.ReadData2;
 
         EX_MEM_Reg.ALUResult = result;
     }
+
+    /*
+    sub將傳過來的ReadData做相減運算
+    */
     else if (ID_EX_Reg.op[0] == 's' && ID_EX_Reg.op[1] == 'u')
     {
         int result = ID_EX_Reg.ReadData1 - ID_EX_Reg.ReadData2;
 
         EX_MEM_Reg.ALUResult = result;
     }
+
+    /*
+    branch藉由減法判斷ReadData是否equal，equal則更新PC，not equal則PC=PC+4(在這支程式中為line=line+1);
+    */
     else if (ID_EX_Reg.op[0] == 'b')
     {
         int result = ID_EX_Reg.ReadData1 - ID_EX_Reg.ReadData2;
+
         /*
-        if result equal zero, need branch.
+        if result equal zero,branch.
         */
         if (result == 0)
         {
@@ -456,14 +482,14 @@ void EX()
             line = line + ID_EX_Reg.SignExtend;
             branch_equal = true;
         }
-
+        /*
+        not equal
+        */
         else
         {
             line = line + 1;
         }
 
-        /*
-         */
         branch_outcome = true;
     }
 
@@ -481,8 +507,10 @@ void EX()
     EX_MEM_Reg.ReadData2 = ID_EX_Reg.ReadData2;
     EX_MEM_Reg.TargetReg = (ID_EX_Reg.RegDst) ? ID_EX_Reg.rd : ID_EX_Reg.rt;
 
+    /*
     ID_EX initial;
     ID_EX_Reg = initial;
+    */
 
     EX_Off = true;
     MEM_Off = false;
@@ -523,9 +551,10 @@ void MEM()
     MEM_WB_Reg.ALUResult = EX_MEM_Reg.ALUResult;
     MEM_WB_Reg.TargetReg = EX_MEM_Reg.TargetReg;
 
+    
     EX_MEM initial;
     EX_MEM_Reg = initial;
-
+    
     MEM_Off = true;
     WB_Off = false;
 }
@@ -556,8 +585,10 @@ void WB()
     }
     outFile.close();
 
+    /*
     MEM_WB initial;
-    MEM_WB_Reg = initial;
+    MEM_WB_Reg = initial;    
+    */
 
     WB_Off = true;
 }
