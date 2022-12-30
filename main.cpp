@@ -150,8 +150,9 @@ void IF()
     /*
     當遇到beq在ID階段正常decode的時候(beq的ID階段沒遇到stall)，則需要先將IF_ID_Reg值更新，
     使得當beq進入EX階段，計算出not branch的結果後，ID做decode的時候不會直接重複decode同
-    一個指令。(作圖解釋later)
+    一個指令。
     */
+    
     if (beq_stall)
     {
         IF_ID_Reg.instruction = instruction;
@@ -188,7 +189,7 @@ void ID()
     /*
     這個判斷主要是在處理當beq指令進到EX階段後，ID階段所做的處理，因為當beq進到EX階段後，同cycle的
     ID階段可能會遇到以下兩種情況:
-    1.branch結果出來，結果為equal，表示這個ID階段需要做stall，因為指令還沒IF。
+    1.branch結果出來，結果為equal，表示這個ID階段需要做stall，因為指令還沒被fetch。
     2.branch結果出來，結果為not equal，直接將IF_ID暫存器中存放的指令拿出來做decode。
     */
 
@@ -555,7 +556,7 @@ void MEM()
     MEM_WB_Reg.TargetReg = EX_MEM_Reg.TargetReg;
 
     /*
-    在成功EX_MEM Reg的資訊傳送到MEM_WB Reg後，清空暫存器。
+    在成功將EX_MEM Reg的資訊傳送到MEM_WB Reg後，清空暫存器。
     */
     EX_MEM initial;
     EX_MEM_Reg = initial;
@@ -713,6 +714,8 @@ int main()
     {
         outFile << mem[i] << "  ";
     }
+    outFile << endl << endl;
+    outFile.close();
 
     return 0;
 }
