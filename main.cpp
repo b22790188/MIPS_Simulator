@@ -349,11 +349,7 @@ void ID()
     }
 
     /*
-    Hazard check
-    All instruction hazard check except branch have same hazard check condition.
-    Branch instruction hazard check needs to be handled in other way.
-
-    判斷現在指令有沒有跟前指令衝突
+    先藉由OP判斷當前指令，再檢查有沒有跟前指令衝突
     若有衝突表示需要stall，清空暫存器，令後面階段做NOP。
     而因為需要等到前指令在WB階段將值寫回暫存器後，才可以讀到正確的值，所以至少需要等待兩個cycle(EX,MEM stage)，
     也就是下方程式碼將stall設為2的原因。
@@ -376,12 +372,8 @@ void ID()
             /*
             Wait until branch outcome determined before fetching next instruction.
             */
-
             beq_stall = true;
-            /*
-            stall = 1;
-            PC_Write = false;
-            */
+
         }
     }
     else
@@ -391,23 +383,30 @@ void ID()
             stall = 2;
             PC_Write = false;
 
+            /*
+            遇到stall時清空ID_EX暫存器。
+            */
             ID_EX initial;
             ID_EX_Reg = initial;
-        }
-    }
 
+        }
+
+    }
     /*
-    ID階段結束，EX階段開始。
+    指令被decode且沒有與前指令衝突。
+    所以設定ID_Off為true表示ID階段結束。
+    設定EX_off為false表示EX_off階段開始。
     */
     ID_Off = true;
     EX_Off = false;
+
 }
 
 void EX()
 {
     /*
     用來判斷是否做NOP，若ID_EX暫存器中的控制信號皆為0的時候，表示需做nop，所以接下來的
-    EX運算、MEM階段、WB階段都不需要執行了，所以直接return。
+    EX運算、MEM階段、WB階段都不需要執行，所以直接return。
     */
     if (!ID_EX_Reg.RegDst && !ID_EX_Reg.ALUSrc && !ID_EX_Reg.Branch && !ID_EX_Reg.MemRead &&
         !ID_EX_Reg.MemWrite && !ID_EX_Reg.RegWrite && !ID_EX_Reg.MemtoReg)
@@ -508,17 +507,17 @@ void EX()
     EX_MEM_Reg.TargetReg = (ID_EX_Reg.RegDst) ? ID_EX_Reg.rd : ID_EX_Reg.rt;
 
     /*
-    ID_EX initial;
-    ID_EX_Reg = initial;
+    EX階段結束，啟動MEM階段。
     */
-
     EX_Off = true;
     MEM_Off = false;
 }
 
 void MEM()
 {
-
+    /*
+    檔案輸出
+    */
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
     outFile << "    " << EX_MEM_Reg.op << ":MEM ";
@@ -533,6 +532,10 @@ void MEM()
                 << " " << EX_MEM_Reg.RegWrite << "X" << endl;
     }
     outFile.close();
+
+    /*
+    藉由MEMRead及MEMWrite來決定是否需要對記憶體進行讀取/寫入
+    */
 
     // load from memory
     if (EX_MEM_Reg.MemRead)
@@ -551,7 +554,9 @@ void MEM()
     MEM_WB_Reg.ALUResult = EX_MEM_Reg.ALUResult;
     MEM_WB_Reg.TargetReg = EX_MEM_Reg.TargetReg;
 
-    
+    /*
+    在成功EX_MEM Reg的資訊傳送到MEM_WB Reg後，清空暫存器。
+    */
     EX_MEM initial;
     EX_MEM_Reg = initial;
     
@@ -560,15 +565,20 @@ void MEM()
 }
 
 void WB()
-{
+{   
+    /*
+    檔案輸出
+    */
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
     outFile << "    " << MEM_WB_Reg.op << ":WB ";
+    
     if (MEM_WB_Reg.RegWrite)
     {
         outFile << MEM_WB_Reg.RegWrite << MEM_WB_Reg.MemtoReg << endl;
+        
         /*
-        Write back to register
+        藉由MemtoReg來判斷要將哪一個內容寫回暫存器中。
         */
         if (!MEM_WB_Reg.MemtoReg)
         {
@@ -585,20 +595,15 @@ void WB()
     }
     outFile.close();
 
-    /*
-    MEM_WB initial;
-    MEM_WB_Reg = initial;    
-    */
-
     WB_Off = true;
 }
 
 int main()
 {
     /*
-    @param numOfIns specified to number of instruction in memory.
-    @param buf is used as buffer.
-    @param inFile is used as inputFilestream.
+    @param numOfIns 用來記錄檔案中有多少則指令。
+    @param buf      做為getline參數
+    @param inFile   讀檔用參數
     */
     int numOfIns = 0;
     int cycle = 1;
@@ -606,8 +611,7 @@ int main()
     fstream inFile;
 
     /*
-    Initialization regitser and memory, and also get how many instruction will be
-    executed.
+    Mem及Reg初始化。
     */
     initialization();
 
@@ -618,6 +622,9 @@ int main()
     }
     buf = "";
 
+    /*
+    Pipeline模擬。執行順序與指令相反，由WB -> IF，並藉由五個boolean變數來作為各階段的開始/結束信號。
+    */
     while (true)
     {
         fstream outFile;
@@ -625,6 +632,10 @@ int main()
         outFile << "Cycle: " << cycle << endl;
         outFile.close();
 
+        /*
+        因為stall狀況會使PC write為false，因此當stall結束時需要將PC_write改回成true
+        讓IF階段可以正常更新PC。
+        */
         if (stall == 0)
         {
             PC_Write = true;
@@ -644,7 +655,14 @@ int main()
         {
             EX();
         }
-
+        
+        /*
+        各個階段的開關(前面宣告的IF_Off,ID_Off...)都是由前一個階段來進行控制。
+        因此，若最後一行指令在ID階段發現需要stall時，要重做Instruction Deocde的時候，
+        會因為IF階段已經全數執行完畢，而導致無法觸發ID階段重新執行，因而造成ID階段一直無法執行
+        程式也無法結束，陷入無窮迴圈的狀況。
+        所以就需要多一個stall判斷，來讓最後一條指令如果遇到stall時，可以正常執行結束。
+        */
         if (!ID_Off || stall > 0)
         {
             ID();
@@ -669,7 +687,7 @@ int main()
     }
 
     /*
-    reg and mem output
+    暫存器及記憶體值輸出。
     */
     fstream outFile;
     outFile.open("result.txt", ios::out | ios::app);
