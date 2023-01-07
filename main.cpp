@@ -20,7 +20,7 @@ struct IF_ID
     bool IF_ID_Write = true;
 };
 struct ID_EX
-{
+{   
     /*
     控制信號
     */
@@ -89,14 +89,14 @@ static int mem[32] = {0};
 @param line : 指當前指令所在的行數，模擬MIPS Pipeline CPU中的PC
 @param branch_outcome: 用來確定branch指令的計算結果是否已經出來
 @param branch_equal: 判斷branch結果為equal or not equal
-@param beq_stall: beq正常執行時需要的變數
+@param beq_normal: beq正常執行時需要的變數
 */
 int stall = 0;
 int line = 1;
 bool PC_Write = true;
 bool branch_outcome = false;
 bool branch_equal = false;
-bool beq_stall = false;
+bool beq_normal = false;
 
 /*
 對各個階段使用bool變數做為階段啟動的開關
@@ -153,10 +153,10 @@ void IF()
     一個指令。
     */
     
-    if (beq_stall)
+    if (beq_normal)
     {
         IF_ID_Reg.instruction = instruction;
-        beq_stall = false;
+        beq_normal = false;
         IF_Off = true;
         ID_Off = false;
         return;
@@ -369,11 +369,11 @@ void ID()
             ID_EX_Reg = initial;
         }
         else
-        {
+        {   
             /*
-            Wait until branch outcome determined before fetching next instruction.
+            beq_normal signal是指當beq指令正常執行時，會需要發出一個信號告知IF階段，讓IF階段先進行指令的更新。
             */
-            beq_stall = true;
+            beq_normal = true;
 
         }
     }
